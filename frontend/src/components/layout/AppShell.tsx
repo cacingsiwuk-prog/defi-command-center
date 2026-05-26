@@ -14,28 +14,42 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState<boolean>(() =>
     safeLocalStorageGet<boolean>(COLLAPSED_KEY, false),
   );
+  // Mobile drawer state. Always starts closed on each visit.
+  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
   useEffect(() => {
     safeLocalStorageSet(COLLAPSED_KEY, collapsed);
   }, [collapsed]);
 
+  // Lock body scroll while the mobile drawer is open so the backdrop sits flush.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const original = document.body.style.overflow;
+    if (mobileOpen) document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [mobileOpen]);
+
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="relative flex min-h-screen items-start bg-background text-foreground">
+      {/* Atmospheric layers: never block input, sit behind everything else. */}
+      <div className="ambient-mesh" aria-hidden />
+      <div className="ambient-grain" aria-hidden />
       <Sidebar
         collapsed={collapsed}
-        onToggle={() => setCollapsed((prev) => !prev)}
+        onToggleCollapsed={() => setCollapsed((prev) => !prev)}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
         walletConnected={isConnected}
       />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 overflow-x-hidden p-4 md:p-6">
+      <div className="relative z-10 flex min-h-screen min-w-0 flex-1 flex-col">
+        <Topbar onOpenMobileMenu={() => setMobileOpen(true)} />
+        <main className="flex-1 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 md:px-8 md:py-7">
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>
         </main>
-        <footer className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Built with free public APIs · CoinGecko · DefiLlama · Etherscan · alternative.me · CryptoCompare · Reservoir · LI.FI · 1inch
-        </footer>
       </div>
     </div>
   );
