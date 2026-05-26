@@ -1,5 +1,7 @@
 # DeFi Command Center
 
+**🌐 Live:** [app.garok.my.id](https://app.garok.my.id)
+
 A Bloomberg-style Web3/DeFi terminal — a multi-page SPA built with Vite + React + TypeScript on the
 frontend and a single Vercel Python serverless function on the backend, deployable on Vercel using
 only free APIs (no API keys required).
