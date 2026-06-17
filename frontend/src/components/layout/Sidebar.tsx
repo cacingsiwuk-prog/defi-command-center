@@ -1,0 +1,290 @@
+import { useEffect, useMemo, useState } from "react";
+import { NavLink, Link, useLocation } from "react-router-dom";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, LineChart, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+
+import { NAV_SECTIONS, findRouteByPath } from "@/routes/config";
+import type { RouteSection } from "@/routes/config";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/storage";
+import { leafSlug } from "@/i18n";
+
+interface Props {
+  /** Desktop-only: whether the sidebar is in icon-only (collapsed) mode. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  /** Mobile-only: whether the drawer is open. */
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  walletConnected: boolean;
+}
+
+const OPEN_ID_KEY = "dcc_sidebar_open_id_v2";
+
+export function Sidebar({
+  collapsed,
+  onToggleCollapsed,
+  mobileOpen,
+  onMobileClose,
+  walletConnected,
+}: Props) {
+  const location = useLocation();
+  const { t } = useTranslation();
+  const activeSectionId = useMemo(() => {
+    const { section } = findRouteByPath(location.pathname);
+    return section?.id ?? null;
+  }, [location.pathname]);
+
+  // Accordion: at most one section open at a time. Auto-expands the active section.
+  const [openId, setOpenId] = useState<string | null>(() =>
+    safeLocalStorageGet<string | null>(OPEN_ID_KEY, null),
+  );
+
+  useEffect(() => {
+    if (activeSectionId && openId !== activeSectionId) {
+      setOpenId(activeSectionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSectionId]);
+
+  useEffect(() => {
+    safeLocalStorageSet(OPEN_ID_KEY, openId);
+  }, [openId]);
+
+  // Close the mobile drawer whenever the user navigates to a different route.
+  useEffect(() => {
+    if (mobileOpen) onMobileClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
+
+  const visibleSections: RouteSection[] = NAV_SECTIONS.filter(
+    (section) => !section.walletGated || walletConnected,
+  );
+
+  // Mobile drawer is always expanded (full labels visible); desktop respects `collapsed`.
+  return (
+    <>
+      {/* Mobile backdrop. Only visible when drawer is open. */}
+      <div
+        aria-hidden={!mobileOpen}
+        onClick={onMobileClose}
+        className={cn(
+          "fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-200 md:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      />
+      <aside
+        className={cn(
+          // Shared
+          "flex flex-col border-r border-border bg-card text-card-foreground",
+          // Mobile (drawer)
+          "fixed inset-y-0 left-0 z-40 w-64 max-w-[80vw] transform transition-transform duration-200 md:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+        aria-hidden={!mobileOpen}
+      >
+        <SidebarInner
+          collapsed={false}
+          showMobileClose
+          onMobileClose={onMobileClose}
+          onToggleCollapsed={onToggleCollapsed}
+          visibleSections={visibleSections}
+          openId={openId}
+          setOpenId={setOpenId}
+          toggle={toggle}
+          activeSectionId={activeSectionId}
+          t={t}
+        />
+      </aside>
+      <aside
+        className={cn(
+          // Desktop sidebar: sticky, takes layout space.
+          "sticky top-0 z-20 hidden h-screen max-h-screen flex-shrink-0 flex-col self-start border-r border-border bg-card text-card-foreground transition-[width] duration-150 md:flex",
+          collapsed ? "w-14" : "w-60",
+        )}
+      >
+        <SidebarInner
+          collapsed={collapsed}
+          showMobileClose={false}
+          onMobileClose={onMobileClose}
+          onToggleCollapsed={onToggleCollapsed}
+          visibleSections={visibleSections}
+          openId={openId}
+          setOpenId={setOpenId}
+          toggle={toggle}
+          activeSectionId={activeSectionId}
+          t={t}
+        />
+      </aside>
+    </>
+  );
+}
+
+interface InnerProps {
+  collapsed: boolean;
+  showMobileClose: boolean;
+  onMobileClose: () => void;
+  onToggleCollapsed: () => void;
+  visibleSections: RouteSection[];
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
+  toggle: (id: string) => void;
+  activeSectionId: string | null;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}
+
+function SidebarInner({
+  collapsed,
+  showMobileClose,
+  onMobileClose,
+  onToggleCollapsed,
+  visibleSections,
+  openId,
+  setOpenId,
+  toggle,
+  activeSectionId,
+  t,
+}: InnerProps) {
+  return (
+    <>
+      <div className="flex h-12 items-center justify-between border-b border-border px-3">
+        <Link to="/" className="flex items-center gap-2">
+          <LineChart className="h-5 w-5 text-primary" />
+          {!collapsed && (
+            <span className="text-base font-semibold leading-none tracking-tight">DCC</span>
+          )}
+        </Link>
+        {showMobileClose ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close menu"
+            onClick={onMobileClose}
+            className="h-7 w-7"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle sidebar"
+            onClick={onToggleCollapsed}
+            className="h-7 w-7"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        )}
+      </div>
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-2 py-3">
+        {!collapsed && <div className="label-eyebrow mb-2 px-2">Terminal</div>}
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) =>
+            cn(
+              "mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition",
+              isActive
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              collapsed && "justify-center",
+            )
+          }
+          title={t("nav.home")}
+        >
+          <Home className="h-4 w-4 flex-shrink-0" />
+          {!collapsed && <span>{t("nav.home")}</span>}
+        </NavLink>
+        {!collapsed && <div className="label-eyebrow mb-1 mt-3 px-2">Sections</div>}
+        {visibleSections.map((section) => {
+          const isOpen = openId === section.id;
+          const isActive = activeSectionId === section.id;
+          const SectionIcon = section.icon;
+          const sectionLabel = t(`nav.sections.${section.id}.label`, {
+            defaultValue: section.label,
+          });
+          return (
+            <div key={section.id} className="mb-0.5">
+              <div
+                className={cn(
+                  "flex items-stretch rounded-md transition",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Link
+                  to={section.landingPath}
+                  className={cn(
+                    "flex flex-1 items-center gap-2 rounded-l-md px-2 py-1.5 text-sm font-medium",
+                    collapsed && "justify-center rounded-md",
+                  )}
+                  title={sectionLabel}
+                  onClick={() => setOpenId(section.id)}
+                >
+                  <SectionIcon className="h-4 w-4 flex-shrink-0" />
+                  {!collapsed && <span className="truncate">{sectionLabel}</span>}
+                </Link>
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(section.id);
+                    }}
+                    aria-label={isOpen ? `Collapse ${sectionLabel}` : `Expand ${sectionLabel}`}
+                    className="flex w-7 items-center justify-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 transition-transform",
+                        isOpen ? "rotate-0" : "-rotate-90",
+                      )}
+                    />
+                  </button>
+                )}
+              </div>
+              {!collapsed && isOpen && (
+                <ul className="mt-0.5 space-y-0.5 border-l border-border/60 pl-2">
+                  {section.items.map((item) => {
+                    const Icon = item.icon ?? section.icon;
+                    const slug = leafSlug(section.basePath, item.to);
+                    const itemLabel = t(`nav.items.${section.id}.${slug}.label`, {
+                      defaultValue: item.label,
+                    });
+                    return (
+                      <li key={item.to}>
+                        <NavLink
+                          to={item.to}
+                          end={item.to === section.basePath}
+                          className={({ isActive: leafActive }) =>
+                            cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition",
+                              leafActive
+                                ? "bg-primary/15 text-primary"
+                                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                            )
+                          }
+                          title={itemLabel}
+                        >
+                          <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">{itemLabel}</span>
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      <div className="border-t border-border p-2 text-[10px] text-muted-foreground">
+        <div className={cn("font-mono tracking-wide", collapsed && "text-center")}>DCC v0.1</div>
+      </div>
+    </>
+  );
+}
